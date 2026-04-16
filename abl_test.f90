@@ -1,0 +1,191 @@
+module user
+  use neko
+  implicit none
+
+  real(kind=rp) :: u_geo
+
+contains
+
+  ! Register user defined functions (see user_intf.f90)
+  subroutine user_setup(user)
+    type(user_t), intent(inout) :: user
+
+    u_geo = 10.0_rp
+
+    user%initial_conditions => user_ic
+    user%compute => user_compute                                                                                                                                                                                                                                               
+    user%dirichlet_conditions => dirichlet_update
+  end subroutine user_setup
+
+  ! User defined initial condition
+  subroutine user_ic(scheme_name, fields)
+    character(len=*), intent(in) :: scheme_name
+    type(field_list_t), intent(inout) :: fields
+    type(field_t), pointer :: u, v, w, s
+    type(field_t), pointer :: p
+    type(dofmap_t), pointer :: dof
+    integer :: i
+    type(field_t), pointer :: fringe, ubf, vbf, wbf  
+    real(kind=rp) :: zmin_spng, delta_spng, lambda_max
+    real(kind=rp) :: x, y, z
+    real(kind=rp) :: eps, kx, ky, lx, ly, alpha, beta, gamma, delta, PI
+    real(kind=rp) :: z1, z2, ze
+    real(kind=rp) :: theta0, theta1, alpha_theta, gamma_theta
+
+    PI = (4.*atan(1.))
+
+    kx = 5.0_rp
+    ky = 7.0_rp
+    lx = 40.0_rp
+    ly = 40.0_rp
+    eps = 0.4_rp
+
+    ! parameters for temperature profile
+    alpha_theta = 0.08_rp
+    gamma_theta = 0.003_rp
+    z1 = 500.0_rp
+    z2 = 550.0_rp
+    theta0 = 300.0_rp
+    theta1 = theta0 + alpha_theta * (z2 - z1)
+
+    ! parameters for TKE profile
+    ze = 600.0_rp
+
+    alpha = kx * PI / 1500.0_rp
+    beta = ky * PI / 1500.0_rp
+    gamma = lx * PI / 1500.0_rp
+    delta = ly * PI / 1500.0_rp
+    if (scheme_name .eq. 'fluid') then
+       u => fields%get("u")
+       v => fields%get("v")
+       w => fields%get("w")
+
+       ! Implement top-mounted sponge l(z) = l*S( (z-z0)/delta ) 
+       call neko_registry%add_field(u%dof,"sponge_fringe")
+       fringe => neko_registry%get_field("sponge_fringe")
+       call neko_registry%add_field(u%dof,"sponge_bf_u")
+       ubf => neko_registry%get_field("sponge_bf_u")
+       call neko_registry%add_field(u%dof,"sponge_bf_v")
+       vbf => neko_registry%get_field("sponge_bf_v")
+       call neko_registry%add_field(u%dof,"sponge_bf_w")
+       wbf => neko_registry%get_field("sponge_bf_w")
+
+       zmin_spng = 1800.0_rp
+       delta_spng = 150.0_rp
+       fringe%x(:,1,1,1) = 0.0_rp       
+       
+       do i = 1, fringe%size()
+         z = fringe%dof%z(i,1,1,1)
+   
+         if (z .gt. zmin_spng) then
+            fringe%x(i,1,1,1) = stp_fun( (z - zmin_spng)/delta_spng )
+         end if
+
+         ubf%x(i,1,1,1) = u_geo
+         
+       end do
+
+       vbf = 0.0_rp
+       wbf = 0.0_rp
+
+       if (neko_bcknd_device .eq. 1) then
+          call device_memcpy(ubf%x, ubf%x_d, ubf%size(), &
+                host_to_device, .false.)
+          call device_memcpy(vbf%x, vbf%x_d, vbf%size(), &
+                host_to_device, .false.)
+          call device_memcpy(wbf%x, wbf%x_d, wbf%size(), &
+                host_to_device, .false.)
+          call device_memcpy(fringe%x, fringe%x_d, fringe%size(), &
+                host_to_device, .false.)
+       end if
+ 
+
+       do i = 1, u%dof%size()
+          u%x(i,1,1,1) = u_geo
+          v%x(i,1,1,1) = 0.0_rp
+          w%x(i,1,1,1) = 0.0_rp
+          x = u%dof%x(i,1,1,1)
+          y = u%dof%y(i,1,1,1)
+          z = u%dof%z(i,1,1,1)
+          if (z .le. 50) then ! Small perturbation to help get turbulence started
+             u%x(i,1,1,1) = u%x(i,1,1,1) + eps*(sin(alpha*x)*sin(beta*y)) &
+                  + eps*(sin(gamma*x)*sin(delta*y))
+             v%x(i,1,1,1) = v%x(i,1,1,1) + eps*(sin(alpha*x)*sin(beta*y)) &
+                  + eps*(sin(gamma*x)*sin(delta*y))
+             w%x(i,1,1,1) = w%x(i,1,1,1) - eps*(alpha * cos(alpha*x)*sin(beta*y)) &
+                  - eps*(gamma * cos(gamma*x)*sin(delta*y))
+          endif
+       end do
+    else ! same i.c. for both temperature and passive scalar
+       s => fields%get(scheme_name)
+       if ((scheme_name .eq. 'temperature') .or. (scheme_name .eq. 's01')) then
+          do i = 1, s%dof%size()
+             z = s%dof%z(i,1,1,1)
+             if (z .le. z1) then
+                s%x(i,1,1,1) = theta0
+             elseif (z .le. z2) then
+                s%x(i,1,1,1) = theta0 + alpha_theta * (z - z1)
+             else
+                s%x(i,1,1,1) = theta1 + gamma_theta * (z - z2)
+             endif
+          end do
+       elseif (scheme_name .eq. 'TKE') then
+          do i = 1, s%dof%size()
+             z = s%dof%z(i,1,1,1)
+             if (z .le. ze) then
+                s%x(i,1,1,1) = 0.4_rp * (1 - z/ze)*(1 - z/ze)*(1 - z/ze)
+             else
+                s%x(i,1,1,1) = 0.0_rp
+             endif
+          end do
+       endif
+    endif
+  end subroutine user_ic
+
+  ! Smooth step function, 0 if x <= 0, 1 if x >= 1, 1/erp(1/(x-1) + 1/x) between 0 and 1
+  function stp_fun(x) result(y)
+    real(kind=rp), intent(in) :: x
+    real(kind=rp)             :: y
+ 
+    if ( x.le.0._rp ) then
+       y = 0._rp
+    else if ( x.ge.1._rp ) then
+       y = 1._rp
+    else
+       y = 1._rp / (1._rp + exp( 1._rp/(x-1._rp) + 1._rp/x))
+    end if
+ 
+  end function stp_fun
+
+  subroutine user_compute(time)
+      type(time_state_t), intent(in) :: time
+      real(kind=rp), pointer :: bc_value
+
+      bc_value => neko_const_registry%get_real_scalar("bc_value")
+
+      bc_value = 300 + 0.00012 * time%t
+
+  end subroutine user_compute
+
+  subroutine dirichlet_update(fields, bc, time)
+    type(field_list_t), intent(inout) :: fields
+    type(field_dirichlet_t), intent(in) :: bc
+    type(time_state_t), intent(in) :: time
+    integer i
+
+      if (fields%items(1)%ptr%name .eq. "temperature") then
+
+       associate(s => fields%items(1)%ptr)
+            do i = 1, bc%msk(0)
+               s%x(bc%msk(i), 1, 1, 1) = 300 + 0.00012 * time%t
+            end do
+            if (neko_bcknd_device .eq. 1) then
+               call device_memcpy(s%x, s%x_d, s%size(), &
+                     host_to_device, sync=.false.)
+            end if
+         end associate
+      end if
+  end subroutine dirichlet_update
+
+
+end module user
