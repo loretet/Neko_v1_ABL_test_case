@@ -154,11 +154,22 @@ def csv_to_xr(path, type="fluid", height="z", fluid_csv=None):
             ds[var] = ds[var] - (ds[var[0]] * ds[var[1]])
     return ds
 
-def calc_percent_diff(test_val, ref_val):
-    if np.allclose(test_val, ref_val, atol=1e-12): return 0.0
+def calc_percent_diff(test_val, ref_val, scale=None):
+    if np.allclose(test_val, ref_val, atol=1e-12, equal_nan=True):
+        return 0.0
+    
     diff = np.abs(test_val - ref_val)
-    denom = np.abs(ref_val) + 1e-10
-    return np.nanmax(diff / denom) * 100
+    
+    # If no scale is provided (e.g., for velocity), use the maximum value of the profile
+    if scale is None:
+        denom = np.nanmax(np.abs(ref_val))
+    else:
+        denom = scale
+
+    if denom < 1e-12:
+        return np.nanmax(diff) * 100
+        
+    return (np.nanmax(diff) / denom) * 100
 
 def stats_test(f_csv, f_ref, t_csv, t_ref, s_csv, s_ref, height="z", threshold=1.0):
     print("--- Running stats_test ---")
