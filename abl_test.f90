@@ -13,7 +13,7 @@ contains
     u_geo = 10.0_rp
 
     user%initial_conditions => user_ic
-    user%compute => user_compute                                                                                                                                                                                                                                               
+    user%compute => user_compute                                                                    
     user%dirichlet_conditions => dirichlet_update
   end subroutine user_setup
 
@@ -85,8 +85,8 @@ contains
          
        end do
 
-       vbf = 0.0_rp
-       wbf = 0.0_rp
+       vbf%x(:,1,1,1) = 0.0_rp
+       wbf%x(:,1,1,1) = 0.0_rp
 
        if (neko_bcknd_device .eq. 1) then
           call device_memcpy(ubf%x, ubf%x_d, ubf%size(), &
@@ -133,7 +133,7 @@ contains
           do i = 1, s%dof%size()
              z = s%dof%z(i,1,1,1)
              if (z .le. ze) then
-                s%x(i,1,1,1) = 0.4_rp * (1 - z/ze)*(1 - z/ze)*(1 - z/ze)
+                s%x(i,1,1,1) = 0.4_rp * (1.0_rp - z/ze)*(1.0_rp - z/ze)*(1.0_rp - z/ze)
              else
                 s%x(i,1,1,1) = 0.0_rp
              endif
@@ -162,8 +162,7 @@ contains
       real(kind=rp), pointer :: bc_value
 
       bc_value => neko_const_registry%get_real_scalar("bc_value")
-
-      bc_value = 300 + 0.00012 * time%t
+      bc_value = scalar_bc(time)
 
   end subroutine user_compute
 
@@ -177,7 +176,7 @@ contains
 
        associate(s => fields%items(1)%ptr)
             do i = 1, bc%msk(0)
-               s%x(bc%msk(i), 1, 1, 1) = 300 + 0.00012 * time%t
+               s%x(bc%msk(i), 1, 1, 1) = scalar_bc(time)
             end do
             if (neko_bcknd_device .eq. 1) then
                call device_memcpy(s%x, s%x_d, s%size(), &
@@ -187,5 +186,12 @@ contains
       end if
   end subroutine dirichlet_update
 
+  function scalar_bc(time) result(bc)
+      type(time_state_t), intent(in) :: time
+      real(kind=rp) :: bc
+
+      bc = 300.0_rp + 0.00012_rp * time%t
+
+   end function scalar_bc
 
 end module user
