@@ -13,6 +13,7 @@ contains
     u_geo = 10.0_rp
 
     user%initial_conditions => user_ic
+    user%initialize => user_initialize
     user%compute => user_compute                                                                    
     user%dirichlet_conditions => dirichlet_update
   end subroutine user_setup
@@ -25,8 +26,6 @@ contains
     type(field_t), pointer :: p
     type(dofmap_t), pointer :: dof
     integer :: i
-    type(field_t), pointer :: fringe, ubf, vbf, wbf  
-    real(kind=rp) :: zmin_spng, delta_spng, lambda_max
     real(kind=rp) :: x, y, z
     real(kind=rp) :: eps, kx, ky, lx, ly, alpha, beta, gamma, delta, PI
     real(kind=rp) :: z1, z2, ze
@@ -59,46 +58,6 @@ contains
        u => fields%get("u")
        v => fields%get("v")
        w => fields%get("w")
-
-       ! Implement top-mounted sponge l(z) = l*S( (z-z0)/delta ) 
-       call neko_registry%add_field(u%dof,"sponge_fringe")
-       fringe => neko_registry%get_field("sponge_fringe")
-       call neko_registry%add_field(u%dof,"sponge_bf_u")
-       ubf => neko_registry%get_field("sponge_bf_u")
-       call neko_registry%add_field(u%dof,"sponge_bf_v")
-       vbf => neko_registry%get_field("sponge_bf_v")
-       call neko_registry%add_field(u%dof,"sponge_bf_w")
-       wbf => neko_registry%get_field("sponge_bf_w")
-
-       zmin_spng = 1800.0_rp
-       delta_spng = 150.0_rp
-       fringe%x(:,1,1,1) = 0.0_rp       
-       
-       do i = 1, fringe%size()
-         z = fringe%dof%z(i,1,1,1)
-   
-         if (z .gt. zmin_spng) then
-            fringe%x(i,1,1,1) = stp_fun( (z - zmin_spng)/delta_spng )
-         end if
-
-         ubf%x(i,1,1,1) = u_geo
-         
-       end do
-
-       vbf%x(:,1,1,1) = 0.0_rp
-       wbf%x(:,1,1,1) = 0.0_rp
-
-       if (neko_bcknd_device .eq. 1) then
-          call device_memcpy(ubf%x, ubf%x_d, ubf%size(), &
-                host_to_device, .false.)
-          call device_memcpy(vbf%x, vbf%x_d, vbf%size(), &
-                host_to_device, .false.)
-          call device_memcpy(wbf%x, wbf%x_d, wbf%size(), &
-                host_to_device, .false.)
-          call device_memcpy(fringe%x, fringe%x_d, fringe%size(), &
-                host_to_device, .false.)
-       end if
- 
 
        do i = 1, u%dof%size()
           u%x(i,1,1,1) = u_geo
@@ -141,6 +100,32 @@ contains
        endif
     endif
   end subroutine user_ic
+
+  subroutine user_initialize(t)
+    type(time_state_t), intent(in) :: t
+    type(field_t), pointer :: fringe, u
+    integer :: i
+    real(kind=rp) :: zmin_spng, delta_spng, z
+      
+    ! Implement top-mounted sponge l(z) = l*S( (z-z0)/delta )
+    u => neko_registry%get_field("u")
+    call neko_registry%add_field(u%dof,"sponge_fringe")
+    fringe => neko_registry%get_field("sponge_fringe")
+ 
+    zmin_spng = 1800.0_rp
+    delta_spng = 150.0_rp
+    fringe%x(:,1,1,1) = 0.0_rp
+ 
+    do i = 1, fringe%size()
+       z = fringe%dof%z(i,1,1,1)
+ 
+       if (z .gt. zmin_spng) then
+          fringe%x(i,1,1,1) = stp_fun( (z - zmin_spng)/delta_spng )
+       end if
+ 
+    end do
+
+  end subroutine user_initialize
 
   ! Smooth step function, 0 if x <= 0, 1 if x >= 1, 1/erp(1/(x-1) + 1/x) between 0 and 1
   function stp_fun(x) result(y)
