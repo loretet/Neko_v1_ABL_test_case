@@ -2,8 +2,8 @@
 #SBATCH --job-name=test_dp_openmp
 #SBATCH --account=project_465002526
 #SBATCH --time=0-02:05:00              
-#SBATCH --partition=small-g
-#SBATCH --ntasks=8             # n. of nodes x 8. Modify only this for bigger runs
+#SBATCH --partition=dev-g
+#SBATCH --ntasks=8             # n. of nodes = ntasks/8. Modify only this for bigger runs
 #SBATCH --ntasks-per-node=8
 #SBATCH --gpus-per-task=1  
 #SBATCH -c 7                   # n. of processes per task. Keep to 7   
@@ -51,6 +51,8 @@ if [ ! -d ${OUTPUT_DIR} ]; then
     mkdir ${OUTPUT_DIR}
 fi
 
+ml list
+
 cat << EOF > select_gpu
 #!/bin/bash
 
@@ -61,6 +63,6 @@ EOF
 chmod +x ./select_gpu
 
 d="$(date +%F_%H-%M-%S)"
-srun -u --cpu-bind=${BIND_SETTING},verbose ./select_gpu ./${NEKO_COMP} ${CASE_FILE} >> logfiles/log.run_${d} 2>&1
+srun -u --cpu-bind=${BIND_SETTING},verbose ./select_gpu ./${NEKO_COMP} ${CASE_FILE} > logfiles/log.run_${d} 2>&1
 rm -rf ./select_gpu
 mv *0.* ${OUTPUT_DIR}
