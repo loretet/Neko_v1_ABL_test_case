@@ -22,7 +22,7 @@ lead to the same temperature evolution as it does with the typical Neumann b.c. 
 | :--- | :--- |
 | **Type** | Shear-convective ABL |
 | **Domain Size** | 5 x 5 x 2 km |
-| **Mesh Resolution** | 20 elements per side |
+| **Mesh Resolution** | 16 elements per side |
 | **Polynomial Degree** | 7 |
 | **Boundary Conditions** | Heat flux, Wall model, Geostrophic wind |
 | **SGS Model** | TKE model (Deardorff) |
