@@ -12,7 +12,7 @@ lead to the same temperature evolution as it does with the typical Neumann b.c. 
 
 ### Performance 
 * **Compute Resource:** 1 Dardel CPU node (128 cores).
-* **Runtime:** Should complete in less than one hour.
+* **Runtime:** Should complete in 30 minutes.
 
 ---
 
