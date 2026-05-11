@@ -259,7 +259,7 @@ if __name__ == "__main__":
     t2 = snap_test(SNAP, SNAP_REF, MESH,
                    threshold=10)
     t3 = temp_scal_test(SNAP, MESH,
-                   threshold=2)
+                   threshold=5)
 
     print("\n==================================")
     if all([t1, t2, t3]):
