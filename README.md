@@ -46,4 +46,4 @@ Takes the last simulation snapshot, performs a horizontal average, and compares 
 ### 3. Passive vs Active Scalar Test (`temp_test`)
 Takes the last simulation snapshot, performs a horizontal average, and compares temperature to 
 the passive scalar values at `z=0` (the passive scalar and temperature B.C.'s have been constructed such taht they should give the same surface value).
-* **Failure Condition:** Max % difference > 2% in any variable compared to reference.
+* **Failure Condition:** Max % difference > 5% in any variable compared to reference.
