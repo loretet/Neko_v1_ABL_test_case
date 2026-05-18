@@ -44,7 +44,7 @@ contains
     gamma_theta = 0.003_rp
     z1 = 500.0_rp
     z2 = 550.0_rp
-    theta0 = 300.0_rp
+    theta0 = 10.0_rp
     theta1 = theta0 + alpha_theta * (z2 - z1)
 
     ! parameters for TKE profile
@@ -77,7 +77,7 @@ contains
        end do
     else ! same i.c. for both temperature and passive scalar
        s => fields%get(scheme_name)
-       if ((scheme_name .eq. 'temperature') .or. (scheme_name .eq. 's01')) then
+       if (scheme_name .eq. 'temperature') then
           do i = 1, s%dof%size()
              z = s%dof%z(i,1,1,1)
              if (z .le. z1) then
@@ -88,6 +88,17 @@ contains
                 s%x(i,1,1,1) = theta1 + gamma_theta * (z - z2)
              endif
           end do
+       elseif (scheme_name .eq. 's01') then
+         do i = 1, s%dof%size()
+            z = s%dof%z(i,1,1,1)
+            if (z .le. z1) then
+               s%x(i,1,1,1) = 0.0_rp
+            elseif (z .le. z2) then
+               s%x(i,1,1,1) = 0.0_rp
+            else
+               s%x(i,1,1,1) = 0.0_rp
+            endif
+         end do
        elseif (scheme_name .eq. 'TKE') then
           do i = 1, s%dof%size()
              z = s%dof%z(i,1,1,1)
@@ -175,7 +186,7 @@ contains
       type(time_state_t), intent(in) :: time
       real(kind=rp) :: bc
 
-      bc = 300.0_rp + 0.00012_rp * time%t
+      bc = 10.0_rp + 0.00012_rp * time%t
 
    end function scalar_bc
 
